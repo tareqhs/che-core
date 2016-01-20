@@ -1,0 +1,394 @@
+
+
+impl_file(data) ::= <<
+// GENERATED SOURCE. DO NOT EDIT.
+package <data.packageName>;
+
+import static org.eclipse.che.dto.processor.internal.PropertyHelpers.dto;
+import static org.eclipse.che.dto.processor.internal.PropertyHelpers.enumeration;
+import static org.eclipse.che.dto.processor.internal.PropertyHelpers.listOf;
+import static org.eclipse.che.dto.processor.internal.PropertyHelpers.mapOf;
+import static org.eclipse.che.dto.processor.internal.PropertyHelpers.primitive;
+import static org.eclipse.che.dto.processor.internal.PropertyHelpers.PH_Boolean;
+import static org.eclipse.che.dto.processor.internal.PropertyHelpers.PH_Byte;
+import static org.eclipse.che.dto.processor.internal.PropertyHelpers.PH_Short;
+import static org.eclipse.che.dto.processor.internal.PropertyHelpers.PH_Int;
+import static org.eclipse.che.dto.processor.internal.PropertyHelpers.PH_Long;
+import static org.eclipse.che.dto.processor.internal.PropertyHelpers.PH_Double;
+import static org.eclipse.che.dto.processor.internal.PropertyHelpers.PH_Short;
+import static org.eclipse.che.dto.processor.internal.PropertyHelpers.PH_String;
+
+import org.eclipse.che.dto.processor.internal.PropertyHelpers.PropertyHelper;
+import org.eclipse.che.dto.server.JsonSerializable;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
+
+import java.util.List;
+import java.util.Map;
+
+@SuppressWarnings({ "cast", "serial", "unused" })
+public class <data.containerClass> implements org.eclipse.che.dto.server.DtoFactoryVisitor {
+
+    private static final Gson gson = new GsonBuilder().disableHtmlEscaping().create();
+
+    @Override
+    public void accept(org.eclipse.che.dto.server.DtoFactory dtoFactory) {
+<data.classes:{implClass|
+        dtoFactory.registerProvider(<implClass.dto.qualifiedName>.class, <implClass.name>.DTO_PROVIDER);
+}>
+    \}
+
+<data.classes:{implClass|
+    @org.eclipse.che.dto.shared.DTOImpl("server")
+    public static class <implClass.name>
+            <if(implClass.baseImpl)>extends <implClass.baseImpl.name><endif>
+            implements <implClass.dto.qualifiedName>, JsonSerializable  {
+
+<implClass.properties.values:{p|
+        protected <p.typeInfo.type> <p.fieldName>;
+}>
+		private static class PH {
+<implClass.properties.values:{p|
+			static final PropertyHelper\< <p.typeInfo.refType> > <p.fieldName>
+				= <typeHelper(p.typeInfo)>;
+}>
+		\}
+
+        public static <implClass.name> make() {
+            return new <implClass.name>();
+        \}
+
+        public <implClass.name>() {
+        \}
+        public <implClass.name>(<implClass.dto.qualifiedName> origin) {
+<if(implClass.baseImpl)>
+            super(origin);
+<endif>
+<implClass.properties.values:{p|
+            // <p.fieldName> : <p.typeInfo.type>
+            <p.typeInfo.type> <varIn(p.typeInfo,p.fieldName)> = origin.<p.getter.simpleName>();
+            <copyType(p.typeInfo,p.fieldName)>
+            this.<p.fieldName> = <varOut(p.typeInfo,p.fieldName)>;
+}>
+        \}
+
+<implClass.properties.values:{p|
+        // <p.fieldName> : <p.typeInfo.type>
+        @Override
+        public <p.getter.returnType> <p.getter.simpleName>() {
+            <if(p.ensureName)>this.<p.ensureName>();<endif>
+            return <if(p.typeInfo.getterWrapperType)>new <p.typeInfo.getterWrapperType>(<endif>this.<p.fieldName><if(p.typeInfo.getterWrapperType)>)<endif>;
+        \}
+<if(p.isGetter)>
+        @Override
+        public <p.isGetter.returnType> <p.isGetter.simpleName>() {
+            <if(p.ensureName)>this.<p.ensureName>();<endif>
+            return this.<p.fieldName>;
+        \}
+<endif>
+<if(p.setter)>
+        @Override
+        public void <p.setter.simpleName>(<p.typeInfo.type> v) {
+            this.<p.fieldName> = v;
+        \}
+<endif>
+<if(p.withSetter)>
+        @Override
+        public <p.withSetter.returnType> <p.withSetter.simpleName>(<p.typeInfo.type> v) {
+            this.<p.fieldName> = v;
+            return this;
+        \}
+<endif>
+<if(p.putName)>
+        public void <p.putName>(java.lang.String k, <p.typeInfo.mapValue.type> v) {
+            this.<p.ensureName>();
+            this.<p.fieldName>.put(k, v);
+        \}
+<endif>
+<if(p.addName)>
+        public void <p.addName>(<p.typeInfo.listValue.type> v) {
+            this.<p.ensureName>();
+            this.<p.fieldName>.add(v);
+        \}
+<endif>
+<if(p.clearName)>
+        public void <p.clearName>() {
+            this.<p.ensureName>();
+            this.<p.fieldName>.clear();
+        \}
+<endif>
+<if(p.ensureName)>
+        public void <p.ensureName>() {
+            if (this.<p.fieldName> == null) {
+                this.<p.fieldName> = new <p.typeInfo.defaultImplType>();
+            \}
+        \}
+<endif>
+}>
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof <implClass.name>)) {
+                return false;
+            \}
+<if(implClass.baseImpl)>
+            if (!super.equals(o)) {
+                return false;
+            \}
+<endif>
+            <implClass.name> other = (<implClass.name>)o;
+<implClass.properties.values:{p|
+<if(p.typeInfo.isPrimitive)>
+            if (this.<p.fieldName> != other.<p.fieldName>) {
+                return false;
+            \}
+<else>
+<if(p.ensureName)>
+            this.<p.ensureName>();
+            other.<p.ensureName>();
+<endif>
+            if (!java.util.Objects.equals(this.<p.fieldName>, other.<p.fieldName>)) {
+                return false;
+            \}
+<endif>
+}>
+            return true;
+        \}
+
+        @Override
+        public int hashCode() {
+            return java.util.Arrays.hashCode(new Object[]{<if(implClass.baseImpl)>super.hashCode()<if(implClass.properties)>,<endif><endif>
+                <implClass.properties.values:{p|this.<p.fieldName>};separator=",">
+            \});
+        \}
+
+        public JsonElement toJsonElement() {
+            return toJsonElementInt(true);
+        \}
+        public JsonElement toJsonElementInt(boolean copyJsons) {
+            JsonObject result = new JsonObject();
+<implClass.properties.values:{p|
+            // <p.fieldName> : <p.typeInfo.type>
+            <p.typeInfo.type> <varIn(p.typeInfo,p.fieldName)> = this.<p.fieldName>;
+            <serializeType(p.typeInfo,p.fieldName)>
+            result.add("<p.jsonFieldName>", <varOut(p.typeInfo,p.fieldName)>);
+}>
+            return result;
+        \}
+
+        @Override
+        public String toJson() {
+            return gson.toJson(toJsonElementInt(false));
+        \}
+
+        @Override
+        public String toString() {
+            return toJson();
+        \}
+
+        public static <implClass.name> fromJsonElement(JsonElement jsonElem) {
+            return fromJsonElement(jsonElem, true);
+        \}
+        public static <implClass.name> fromJsonElement(JsonElement jsonElem, boolean copyJsons) {
+            if (jsonElem == null || jsonElem.isJsonNull()) {
+                return null;
+            \}
+            <implClass.name> dto = new <implClass.name>();
+            JsonObject json = jsonElem.getAsJsonObject();
+<implClass.properties.values:{p|
+            // <p.fieldName> : <p.typeInfo.type>
+            if (json.has("<p.jsonFieldName>")) {
+                JsonElement <varIn(p.typeInfo,p.fieldName)> = json.get("<p.jsonFieldName>");
+                <deserializeType(p.typeInfo,p.fieldName)>
+                dto.<p.setter.simpleName>(<varOut(p.typeInfo,p.fieldName)>);
+            \}
+}>
+            return dto;
+        \}
+
+        public static <implClass.name> fromJsonString(String jsonString) {
+            if (jsonString == null) {
+                return null;
+            \}
+            return fromJsonElement(new JsonParser().parse(jsonString), false);
+        \}
+
+        public static final org.eclipse.che.dto.server.DtoProvider\< <implClass.dto.qualifiedName> > DTO_PROVIDER =
+            new org.eclipse.che.dto.server.DtoProvider\< <implClass.dto.qualifiedName> >() {
+                @Override
+                public Class\< ? extends <implClass.dto.qualifiedName> > getImplClass() {
+                    return <implClass.name>.class;
+                \}
+
+                @Override
+                public <implClass.dto.qualifiedName> newInstance() {
+                    return make();
+                \}
+
+                @Override
+                public <implClass.dto.qualifiedName> fromJson(String json) {
+                    return fromJsonString(json);
+                \}
+
+                @Override
+                public <implClass.dto.qualifiedName> fromJson(com.google.gson.JsonElement json) {
+                    return fromJsonElement(json);
+                \}
+
+                @Override
+                public <implClass.dto.qualifiedName> clone(<implClass.dto.qualifiedName> origin) {
+                    return new <implClass.name>(origin);
+                \}
+            \};
+    \}
+}>
+
+    private static JsonElement cloneJsonElement(JsonElement json) {
+        if (json instanceof JsonObject) {
+            JsonObject obj = new JsonObject();
+            for (java.util.Map.Entry\<String, JsonElement> entry : ((JsonObject) json).entrySet()) {
+                obj.add(entry.getKey(), cloneJsonElement(entry.getValue()));
+            \}
+            return obj;
+        \}
+        if (json instanceof JsonArray) {
+            JsonArray arr = new JsonArray();
+            for (JsonElement elm : (JsonArray) json) {
+                arr.add(cloneJsonElement(elm));
+            \}
+        \}
+        return json;
+    \}
+
+\}
+>>
+
+
+serializeType(typeInfo,baseName) ::= <<
+JsonElement <varOut(typeInfo,baseName)>;
+<if(typeInfo.isPrimitive)>
+<baseName>_<typeInfo.id>_out = new JsonPrimitive(<varIn(typeInfo,baseName)>);
+<else>
+if (<varIn(typeInfo,baseName)> == null) {
+    <varOut(typeInfo,baseName)> = JsonNull.INSTANCE;
+\} else {
+<if(typeInfo.isBoxed)>
+    <varOut(typeInfo,baseName)> = new JsonPrimitive(<varIn(typeInfo,baseName)>);
+<elseif(typeInfo.isEnum)>
+    <varOut(typeInfo,baseName)> = new JsonPrimitive(<varIn(typeInfo,baseName)>.name());
+<elseif(typeInfo.dtoImpl)>
+    <varOut(typeInfo,baseName)> = ((<typeInfo.dtoImpl.name>)<varIn(typeInfo,baseName)>).toJsonElementInt(copyJsons);
+<elseif(typeInfo.dtoRef)>
+    <varOut(typeInfo,baseName)> = org.eclipse.che.dto.server.DtoFactory.getInstance().toJsonElement(<varIn(typeInfo,baseName)>);
+<elseif(typeInfo.isAny)>
+    <varOut(typeInfo,baseName)> = <varIn(typeInfo,baseName)> instanceof JsonElement ? cloneJsonElement((JsonElement)<varIn(typeInfo,baseName)>) : null;
+<elseif(typeInfo.listValue)>
+    JsonArray <baseName>_<typeInfo.id>_arr = new JsonArray();
+    for (<typeInfo.listValue.type> <varIn(typeInfo.listValue,baseName)> : <varIn(typeInfo,baseName)>) {
+        <serializeType(typeInfo.listValue,baseName)>
+        <baseName>_<typeInfo.id>_arr.add(<varOut(typeInfo.listValue,baseName)>);
+    \}
+    <varOut(typeInfo,baseName)> = <baseName>_<typeInfo.id>_arr;
+<elseif(typeInfo.mapValue)>
+    JsonObject <baseName>_<typeInfo.id>_map = new JsonObject();
+    for (<typeInfo.mapEntryType> <baseName>_<typeInfo.id>_entry : <varIn(typeInfo,baseName)>.entrySet()) {
+        <typeInfo.mapValue.type> <varIn(typeInfo.mapValue,baseName)> = <baseName>_<typeInfo.id>_entry.getValue();
+        <serializeType(typeInfo.mapValue,baseName)>
+        <baseName>_<typeInfo.id>_map.add(<baseName>_<typeInfo.id>_entry.getKey(), <varOut(typeInfo.mapValue,baseName)>);
+    \}
+    <varOut(typeInfo,baseName)> = <baseName>_<typeInfo.id>_map;
+<endif>
+\}<endif>
+>>
+
+
+deserializeType(typeInfo,baseName) ::= <<
+<typeInfo.type> <varOut(typeInfo,baseName)>;
+<if(typeInfo.isPrimitive)>
+<varOut(typeInfo,baseName)> = <varIn(typeInfo,baseName)>.getAs<typeInfo.primitiveTypeCap>();
+<elseif(typeInfo.dtoImpl)>
+<varOut(typeInfo,baseName)> = <typeInfo.dtoImpl.name>.fromJsonElement(<varIn(typeInfo,baseName)>);
+<elseif(typeInfo.dtoRef)>
+<varOut(typeInfo,baseName)> = org.eclipse.che.dto.server.DtoFactory.getInstance().createDtoFromJson(<varIn(typeInfo,baseName)>, <typeInfo.dtoRef.qualifiedName>.class);
+<elseif(typeInfo.isAny)>
+<varOut(typeInfo,baseName)> = cloneJsonElement(<varIn(typeInfo,baseName)>);
+<elseif(typeInfo.listValue)>
+if (<varIn(typeInfo,baseName)> != null && !<varIn(typeInfo,baseName)>.isJsonNull()) {
+    <varOut(typeInfo,baseName)> = new <typeInfo.defaultImplType>();
+    JsonArray <baseName>_<typeInfo.id>_arr = <varIn(typeInfo,baseName)>.getAsJsonArray();
+    for (JsonElement <varIn(typeInfo.listValue,baseName)> : <baseName>_<typeInfo.id>_arr) {
+        <deserializeType(typeInfo.listValue,baseName)>
+        <varOut(typeInfo,baseName)>.add(<varOut(typeInfo.listValue,baseName)>);
+    \}
+\} else {
+    <varOut(typeInfo,baseName)> = null;
+\}
+<elseif(typeInfo.mapValue)>
+if (<varIn(typeInfo,baseName)> != null && !<varIn(typeInfo,baseName)>.isJsonNull()) {
+    <varOut(typeInfo,baseName)> = new <typeInfo.defaultImplType>();
+    JsonObject <baseName>_<typeInfo.id>_obj = <varIn(typeInfo,baseName)>.getAsJsonObject();
+    for (java.util.Map.Entry\<String, JsonElement> <baseName>_<typeInfo.id>_entry : <baseName>_<typeInfo.id>_obj.entrySet()) {
+        JsonElement <varIn(typeInfo.mapValue,baseName)> = <baseName>_<typeInfo.id>_entry.getValue();
+        <deserializeType(typeInfo.mapValue,baseName)>
+        <varOut(typeInfo,baseName)>.put(<baseName>_<typeInfo.id>_entry.getKey(), <varOut(typeInfo.mapValue,baseName)>);
+    \}
+\} else {
+    <varOut(typeInfo,baseName)> = null;
+\}
+<else>
+<varOut(typeInfo,baseName)> = gson.fromJson(<varIn(typeInfo,baseName)>, <typeInfo.type>.class);
+<endif>
+>>
+
+
+copyType(typeInfo,baseName) ::= <<
+<typeInfo.type> <varOut(typeInfo,baseName)>;
+<if(typeInfo.isPrimitive||typeInfo.isBoxed||typeInfo.isEnum)>
+<baseName>_<typeInfo.id>_out = <varIn(typeInfo,baseName)>;
+<else>
+if (<varIn(typeInfo,baseName)> == null) {
+    <varOut(typeInfo,baseName)> = null;
+\} else {
+<if(typeInfo.dtoImpl)>
+    <varOut(typeInfo,baseName)> = new <typeInfo.dtoImpl.name>(<varIn(typeInfo,baseName)>);
+<elseif(typeInfo.dtoRef)>
+	<varOut(typeInfo,baseName)> = org.eclipse.che.dto.server.DtoFactory.getInstance().clone(<varIn(typeInfo,baseName)>);
+<elseif(typeInfo.isAny)>
+    <varOut(typeInfo,baseName)> = <varIn(typeInfo,baseName)> instanceof JsonElement ? cloneJsonElement((JsonElement)<varIn(typeInfo,baseName)>) : <varIn(typeInfo,baseName)>;
+<elseif(typeInfo.listValue)>
+    <varOut(typeInfo,baseName)> = new <typeInfo.defaultImplType>(<varIn(typeInfo,baseName)>.size());
+    for (<typeInfo.listValue.type> <varIn(typeInfo.listValue,baseName)> : <varIn(typeInfo,baseName)>) {
+        <copyType(typeInfo.listValue,baseName)>
+        <varOut(typeInfo,baseName)>.add(<varOut(typeInfo.listValue,baseName)>);
+    \}
+<elseif(typeInfo.mapValue)>
+    <varOut(typeInfo,baseName)> = new <typeInfo.defaultImplType>(<varIn(typeInfo,baseName)>.size());
+    for (<typeInfo.mapEntryType> <baseName>_<typeInfo.id>_entry : <varIn(typeInfo,baseName)>.entrySet()) {
+        <typeInfo.mapValue.type> <varIn(typeInfo.mapValue,baseName)> = <baseName>_<typeInfo.id>_entry.getValue();
+        <copyType(typeInfo.mapValue,baseName)>
+        <varOut(typeInfo,baseName)>.put(<baseName>_<typeInfo.id>_entry.getKey(), <varOut(typeInfo.mapValue,baseName)>);
+    \}
+<endif>
+\}<endif>
+>>
+
+
+typeHelper(typeInfo) ::= <<
+<if(typeInfo.isPrimitive||typeInfo.isBoxed)>PH_<typeInfo.primitiveTypeCap><elseif(typeInfo.dtoImpl)>dto(<typeInfo.dtoImpl.dto.qualifiedName>.class)<elseif(typeInfo.listValue)>listOf(<typeHelper(typeInfo.listValue)>)<elseif(typeInfo.mapValue)>mapOf(<typeHelper(typeInfo.mapValue)>)<elseif(typeInfo.isEnum)>enumeration(<typeInfo.type>.class)<else>null<endif>
+>>
+
+
+varIn(typeInfo,baseName) ::= <<
+<baseName>_<typeInfo.id>_in
+>>
+
+varOut(typeInfo,baseName) ::= <<
+<baseName>_<typeInfo.id>_out
+>>

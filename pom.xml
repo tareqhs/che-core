@@ -26,6 +26,7 @@
     <modules>
         <module>commons</module>
         <module>platform-api</module>
+        <module>tools</module>
         <module>platform-api-client-gwt</module>
         <module>ide</module>
         <module>che-core-vfs-impl</module>
