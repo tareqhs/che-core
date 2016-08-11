@@ -157,7 +157,7 @@ public class FSMountPoint implements MountPoint {
 
     private class FileLockCacheLoader extends CacheLoader<Path, FileLock> {
         @Override
-        public FileLock load(Path key) {
+        public FileLock load(Path key) throws ServerException {
             DataInputStream dis = null;
 
             try {
@@ -171,9 +171,7 @@ public class FSMountPoint implements MountPoint {
                 }
                 return NO_LOCK;
             } catch (IOException e) {
-                String msg = String.format("Unable read lock for '%s'. ", key);
-                LOG.error(msg + e.getMessage(), e); // More details in log but do not show internal error to caller.
-                throw new RuntimeException(msg);
+                throw new ServerException(reportError(e, "Unable read lock for '%s'. ", key));
             } finally {
                 closeQuietly(dis);
             }
@@ -183,7 +181,7 @@ public class FSMountPoint implements MountPoint {
 
     private class FileMetadataCacheLoader extends CacheLoader<Path, Map<String, String[]>> {
         @Override
-        public Map<String, String[]> load(Path key) {
+        public Map<String, String[]> load(Path key) throws ServerException {
             DataInputStream dis = null;
             try {
                 final Path metadataFilePath = getMetadataFilePath(key);
@@ -196,9 +194,7 @@ public class FSMountPoint implements MountPoint {
                 }
                 return Collections.emptyMap();
             } catch (IOException e) {
-                String msg = String.format("Unable read properties for '%s'. ", key);
-                LOG.error(msg + e.getMessage(), e); // More details in log but do not show internal error to caller.
-                throw new RuntimeException(msg);
+                throw new ServerException(reportError(e,  "Unable read properties for '%s'. ", key));
             } finally {
                 closeQuietly(dis);
             }
@@ -208,7 +204,7 @@ public class FSMountPoint implements MountPoint {
 
     private class AccessControlListCache extends CacheLoader<Path, AccessControlList> {
         @Override
-        public AccessControlList load(Path key) {
+        public AccessControlList load(Path key) throws ServerException {
             DataInputStream dis = null;
             try {
                 final Path aclFilePath = getAclFilePath(key);
@@ -233,9 +229,7 @@ public class FSMountPoint implements MountPoint {
                 }
                 return new AccessControlList();
             } catch (IOException e) {
-                String msg = String.format("Unable read ACL for '%s'. ", key);
-                LOG.error(msg + e.getMessage(), e); // More details in log but do not show internal error to caller.
-                throw new RuntimeException(msg);
+                throw new ServerException(reportError(e, "Unable read ACL for '%s'. ", key));
             } finally {
                 closeQuietly(dis);
             }
@@ -487,9 +481,7 @@ public class FSMountPoint implements MountPoint {
                 throw new ConflictException(String.format("Item '%s' already exists. ", newPath));
             }
         } catch (IOException e) {
-            String msg = String.format("Unable create new file '%s'. ", newPath);
-            LOG.error(msg + e.getMessage(), e); // More details in log but do not show internal error to caller.
-            throw new ServerException(msg);
+            throw new ServerException(reportError(e, "Unable create new file '%s'. ", newPath));
         }
 
         final VirtualFileImpl newVirtualFile = new VirtualFileImpl(newIoFile, newPath, pathToId(newPath), this);
@@ -668,9 +660,7 @@ public class FSMountPoint implements MountPoint {
         } catch (IOException e) {
             // Do nothing for file tree. Let client side decide what to do.
             // User may delete copied files (if any) and try copy again.
-            String msg = String.format("Unable copy '%s' to '%s'. ", source, destination);
-            LOG.error(msg + e.getMessage(), e); // More details in log but do not show internal error to caller.
-            throw new ServerException(msg);
+            throw new ServerException(reportError(e, "Unable copy '%s' to '%s'. ", source, destination));
         }
     }
 
@@ -709,9 +699,7 @@ public class FSMountPoint implements MountPoint {
                     dos = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(renamedAclFile)));
                     aclSerializer.write(dos, sourceAcl);
                 } catch (IOException e) {
-                    String msg = String.format("Unable save ACL for '%s'. ", virtualFile.getPath());
-                    LOG.error(msg + e.getMessage(), e); // More details in log but do not show internal error to caller.
-                    throw new ServerException(msg);
+                    throw new ServerException(reportError(e, "Unable save ACL for '%s'. ", virtualFile.getPath()));
                 } finally {
                     closeQuietly(dos);
                 }
@@ -843,9 +831,7 @@ public class FSMountPoint implements MountPoint {
                 return new ContentStream(virtualFile.getName(), new DeleteOnCloseFileInputStream(f),
                                          virtualFile.getMediaType(), fLength, new Date(ioFile.lastModified()));
             } catch (IOException e) {
-                String msg = String.format("Unable get content of '%s'. ", virtualFile.getPath());
-                LOG.error(msg + e.getMessage(), e); // More details in log but do not show internal error to caller.
-                throw new ServerException(msg);
+                throw new ServerException(reportError(e, "Unable get content of '%s'. ", virtualFile.getPath()));
             } finally {
                 closeQuietly(fIn);
             }
@@ -923,9 +909,7 @@ public class FSMountPoint implements MountPoint {
                 fOut.write(buff, 0, r);
             }
         } catch (IOException e) {
-            String msg = String.format("Unable set content of '%s'. ", virtualFile.getPath());
-            LOG.error(msg + e.getMessage(), e); // More details in log but do not show internal error to caller.
-            throw new ServerException(msg);
+            throw new ServerException(reportError(e, "Unable set content of '%s'. ", virtualFile.getPath()));
         } finally {
             closeQuietly(fOut);
         }
@@ -1085,7 +1069,7 @@ public class FSMountPoint implements MountPoint {
             closeQuietly(zipOut);
             final String name = virtualFile.getName() + ".zip";
             return new ContentStream(name, new DeleteOnCloseFileInputStream(zipFile), ExtMediaType.APPLICATION_ZIP, zipFile.length(), new Date());
-        } catch (IOException | RuntimeException ioe) {
+        } catch (IOException ioe) {
             if (zipFile != null) {
                 zipFile.delete();
             }
@@ -1162,7 +1146,7 @@ public class FSMountPoint implements MountPoint {
                         }
                     }
 
-                    boolean newFile;
+                    boolean newFile = false; // just to allow usage outside the following try block
                     try {
                         if (!(newFile = file.getIoFile().createNewFile())) { // atomic
                             if (!overwrite) {
@@ -1170,9 +1154,7 @@ public class FSMountPoint implements MountPoint {
                             }
                         }
                     } catch (IOException e) {
-                        String msg = String.format("Unable create new file '%s'. ", newPath);
-                        LOG.error(msg + e.getMessage(), e); // More details in log but do not show internal error to caller.
-                        throw new ServerException(msg);
+                        throw new ServerException(reportError(e, "Unable create new file '%s'. ", newPath));
                     }
 
                     doUpdateContent(file, noCloseZip);
@@ -1192,7 +1174,7 @@ public class FSMountPoint implements MountPoint {
                 }
             }
         } catch (IOException e) {
-            throw new ServerException(e.getMessage(), e);
+            throw new ServerException(reportError(e, "Unable to create zip from %s", parent.getVirtualFilePath()));
         } finally {
             closeQuietly(zip);
         }
@@ -1229,9 +1211,7 @@ public class FSMountPoint implements MountPoint {
                     locksSerializer.write(dos, fileLock);
                 }
             } catch (IOException e) {
-                String msg = String.format("Unable lock file '%s'. ", virtualFile.getPath());
-                LOG.error(msg + e.getMessage(), e); // More details in log but do not show internal error to caller.
-                throw new ServerException(msg);
+                throw new ServerException(reportError(e, "Unable lock file '%s'. ", virtualFile.getPath()));
             } finally {
                 closeQuietly(dos);
             }
@@ -1272,9 +1252,7 @@ public class FSMountPoint implements MountPoint {
             // Mark as unlocked in cache.
             lockTokensCache.put(virtualFile.getVirtualFilePath(), NO_LOCK);
         } catch (IOException e) {
-            String msg = String.format("Unable unlock file '%s'. ", virtualFile.getPath());
-            LOG.error(msg + e.getMessage(), e); // More details in log but do not show internal error to caller.
-            throw new ServerException(msg);
+            throw new ServerException(reportError(e, "Unable unlock file '%s'. ", virtualFile.getPath()));
         }
     }
 
@@ -1360,9 +1338,7 @@ public class FSMountPoint implements MountPoint {
                 }
             }
         } catch (IOException e) {
-            String msg = String.format("Unable save ACL for '%s'. ", virtualFile.getPath());
-            LOG.error(msg + e.getMessage(), e); // More details in log but do not show internal error to caller.
-            throw new ServerException(msg);
+            throw new ServerException(reportError(e, "Unable save ACL for '%s'. ", virtualFile.getPath()));
         } finally {
             closeQuietly(dos);
         }
@@ -1559,9 +1535,7 @@ public class FSMountPoint implements MountPoint {
                 }
             }
         } catch (IOException e) {
-            String msg = String.format("Unable save properties for '%s'. ", virtualFile.getPath());
-            LOG.error(msg + e.getMessage(), e); // More details in log but do not show internal error to caller.
-            throw new ServerException(msg);
+            throw new ServerException(reportError(e, "Unable save properties for '%s'. ", virtualFile.getPath()));
         } finally {
             closeQuietly(dos);
         }
@@ -1693,4 +1667,11 @@ public class FSMountPoint implements MountPoint {
             throw new ServerException("Item's name is not set. ");
         }
     }
+
+    private static String reportError(Exception cause, String msg, Object... args) {
+        String formatted = String.format(msg, args);
+        LOG.error(formatted + cause.getMessage(), cause); // More details in log but do not show internal error to caller.
+        return msg;
+    }
+
 }
