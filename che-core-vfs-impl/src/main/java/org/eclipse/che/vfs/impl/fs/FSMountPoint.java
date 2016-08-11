@@ -47,13 +47,13 @@ import org.eclipse.che.api.vfs.shared.dto.VirtualFileSystemInfo;
 import org.eclipse.che.api.vfs.shared.dto.VirtualFileSystemInfo.BasicPermissions;
 import org.eclipse.che.commons.lang.NameGenerator;
 import org.eclipse.che.commons.lang.Pair;
-import org.eclipse.che.commons.lang.cache.Cache;
-import org.eclipse.che.commons.lang.cache.LoadingValueSLRUCache;
-import org.eclipse.che.commons.lang.cache.SynchronizedCache;
 import org.eclipse.che.commons.lang.ws.rs.ExtMediaType;
 import org.eclipse.che.dto.server.DtoFactory;
 
 import com.google.common.annotations.Beta;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.Sets;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
@@ -90,10 +90,10 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
+import static com.google.common.base.Strings.nullToEmpty;
 import static org.eclipse.che.commons.lang.IoUtil.GIT_FILTER;
 import static org.eclipse.che.commons.lang.IoUtil.deleteRecursive;
 import static org.eclipse.che.commons.lang.IoUtil.nioCopy;
-import static org.eclipse.che.commons.lang.Strings.nullToEmpty;
 
 /**
  * Local filesystem implementation of MountPoint.
@@ -103,20 +103,7 @@ import static org.eclipse.che.commons.lang.Strings.nullToEmpty;
 public class FSMountPoint implements MountPoint {
     private static final Logger LOG = LoggerFactory.getLogger(FSMountPoint.class);
 
-    /*
-     * Configuration parameters for caches.
-     * Caches are split to the few partitions to reduce lock contention.
-     * Use SLRU cache algorithm here.
-     * This is required some additional parameters, e.g. protected and probationary size.
-     * See details about SLRU algorithm: http://en.wikipedia.org/wiki/Cache_algorithms#Segmented_LRU
-     */
-    private static final int CACHE_PARTITIONS_NUM        = 1 << 3;
-    private static final int CACHE_PROTECTED_SIZE        = 100;
-    private static final int CACHE_PROBATIONARY_SIZE     = 200;
-    private static final int MASK                        = CACHE_PARTITIONS_NUM - 1;
-    private static final int PARTITION_PROTECTED_SIZE    = CACHE_PROTECTED_SIZE / CACHE_PARTITIONS_NUM;
-    private static final int PARTITION_PROBATIONARY_SIZE = CACHE_PROBATIONARY_SIZE / CACHE_PARTITIONS_NUM;
-    // end cache parameters
+    private static final int MAX_CACHE_SIZE = 200;
 
     private static final int MAX_BUFFER_SIZE  = 200 * 1024; // 200k
     private static final int COPY_BUFFER_SIZE = 8 * 1024; // 8k
@@ -168,13 +155,9 @@ public class FSMountPoint implements MountPoint {
 
     private static final FileLock NO_LOCK = new FileLock("no_lock", 0);
 
-    private class FileLockCache extends LoadingValueSLRUCache<Path, FileLock> {
-        FileLockCache() {
-            super(PARTITION_PROTECTED_SIZE, PARTITION_PROBATIONARY_SIZE);
-        }
-
+    private class FileLockCacheLoader extends CacheLoader<Path, FileLock> {
         @Override
-        protected FileLock loadValue(Path key) {
+        public FileLock load(Path key) {
             DataInputStream dis = null;
 
             try {
@@ -198,13 +181,9 @@ public class FSMountPoint implements MountPoint {
     }
 
 
-    private class FileMetadataCache extends LoadingValueSLRUCache<Path, Map<String, String[]>> {
-        FileMetadataCache() {
-            super(PARTITION_PROTECTED_SIZE, PARTITION_PROBATIONARY_SIZE);
-        }
-
+    private class FileMetadataCacheLoader extends CacheLoader<Path, Map<String, String[]>> {
         @Override
-        protected Map<String, String[]> loadValue(Path key) {
+        public Map<String, String[]> load(Path key) {
             DataInputStream dis = null;
             try {
                 final Path metadataFilePath = getMetadataFilePath(key);
@@ -227,13 +206,9 @@ public class FSMountPoint implements MountPoint {
     }
 
 
-    private class AccessControlListCache extends LoadingValueSLRUCache<Path, AccessControlList> {
-        private AccessControlListCache() {
-            super(PARTITION_PROTECTED_SIZE, PARTITION_PROBATIONARY_SIZE);
-        }
-
+    private class AccessControlListCache extends CacheLoader<Path, AccessControlList> {
         @Override
-        protected AccessControlList loadValue(Path key) {
+        public AccessControlList load(Path key) {
             DataInputStream dis = null;
             try {
                 final Path aclFilePath = getAclFilePath(key);
@@ -280,15 +255,15 @@ public class FSMountPoint implements MountPoint {
 
     /* ----- Access control list feature. ----- */
     private final AccessControlListSerializer      aclSerializer;
-    private final Cache<Path, AccessControlList>[] aclCache;
+    private final LoadingCache<Path, AccessControlList> aclCache;
 
     /* ----- Virtual file system lock feature. ----- */
     private final FileLockSerializer      locksSerializer;
-    private final Cache<Path, FileLock>[] lockTokensCache;
+    private final LoadingCache<Path, FileLock> lockTokensCache;
 
     /* ----- File metadata. ----- */
     private final FileMetadataSerializer               metadataSerializer;
-    private final Cache<Path, Map<String, String[]>>[] metadataCache;
+    private final LoadingCache<Path, Map<String, String[]>> metadataCache;
 
     private final VirtualFileSystemUserContext userContext;
 
@@ -299,7 +274,6 @@ public class FSMountPoint implements MountPoint {
      *         root directory for virtual file system. Any file in higher level than root are not accessible through
      *         virtual file system API.
      */
-    @SuppressWarnings("unchecked")
     FSMountPoint(String workspaceId, java.io.File ioRoot, EventService eventService, SearcherProvider searcherProvider, SystemPathsFilter systemFilter) {
         this.workspaceId = workspaceId;
         this.ioRoot = ioRoot;
@@ -310,20 +284,17 @@ public class FSMountPoint implements MountPoint {
         root = new VirtualFileImpl(ioRoot, Path.ROOT, pathToId(Path.ROOT), this);
         pathLockFactory = new PathLockFactory(FILE_LOCK_MAX_THREADS);
 
+        CacheBuilder<Object, Object> cahceBuilder = CacheBuilder.newBuilder().maximumSize(MAX_CACHE_SIZE);
+
         aclSerializer = new AccessControlListSerializer();
-        aclCache = new Cache[CACHE_PARTITIONS_NUM];
+        aclCache = cahceBuilder.build(new AccessControlListCache());
 
         locksSerializer = new FileLockSerializer();
-        lockTokensCache = new Cache[CACHE_PARTITIONS_NUM];
+        lockTokensCache = cahceBuilder.build(new FileLockCacheLoader());
 
         metadataSerializer = new FileMetadataSerializer();
-        metadataCache = new Cache[CACHE_PARTITIONS_NUM];
+        metadataCache = cahceBuilder.build(new FileMetadataCacheLoader());
 
-        for (int i = 0; i < CACHE_PARTITIONS_NUM; i++) {
-            aclCache[i] = new SynchronizedCache(new AccessControlListCache());
-            lockTokensCache[i] = new SynchronizedCache(new FileLockCache());
-            metadataCache[i] = new SynchronizedCache(new FileMetadataCache());
-        }
         userContext = VirtualFileSystemUserContext.newInstance();
     }
 
@@ -1050,23 +1021,17 @@ public class FSMountPoint implements MountPoint {
 
 
     private void clearLockTokensCache() {
-        for (Cache<Path, FileLock> cache : lockTokensCache) {
-            cache.clear();
-        }
+        lockTokensCache.invalidateAll();
     }
 
 
     private void clearAclCache() {
-        for (Cache<Path, AccessControlList> cache : aclCache) {
-            cache.clear();
-        }
+        aclCache.invalidateAll();
     }
 
 
     private void clearMetadataCache() {
-        for (Cache<Path, Map<String, String[]>> cache : metadataCache) {
-            cache.clear();
-        }
+        metadataCache.invalidateAll();
     }
 
 
@@ -1248,8 +1213,7 @@ public class FSMountPoint implements MountPoint {
 
 
     private String doLock(VirtualFileImpl virtualFile, long timeout) throws ConflictException, ServerException {
-        final int index = virtualFile.getVirtualFilePath().hashCode() & MASK;
-        if (NO_LOCK == lockTokensCache[index].get(virtualFile.getVirtualFilePath())) // causes read from file if need.
+        if (NO_LOCK == lockTokensCache.getUnchecked(virtualFile.getVirtualFilePath())) // causes read from file if need.
         {
             final String lockToken = NameGenerator.generate(null, 16);
             final long expired = timeout > 0 ? (System.currentTimeMillis() + timeout) : Long.MAX_VALUE;
@@ -1273,7 +1237,7 @@ public class FSMountPoint implements MountPoint {
             }
 
             // Save lock token in cache if lock successful.
-            lockTokensCache[index].put(virtualFile.getVirtualFilePath(), fileLock);
+            lockTokensCache.put(virtualFile.getVirtualFilePath(), fileLock);
             return lockToken;
         }
 
@@ -1297,7 +1261,6 @@ public class FSMountPoint implements MountPoint {
     }
 
     private void doUnlock(VirtualFileImpl virtualFile, FileLock lock, String lockToken) throws ForbiddenException, ServerException {
-        final int index = virtualFile.getVirtualFilePath().hashCode() & MASK;
         try {
             if (!lock.getLockToken().equals(lockToken)) {
                 throw new ForbiddenException(String.format("Unable unlock file '%s'. Lock token does not match. ", virtualFile.getPath()));
@@ -1307,7 +1270,7 @@ public class FSMountPoint implements MountPoint {
                 throw new IOException(String.format("Unable delete lock file %s. ", lockIoFile));
             }
             // Mark as unlocked in cache.
-            lockTokensCache[index].put(virtualFile.getVirtualFilePath(), NO_LOCK);
+            lockTokensCache.put(virtualFile.getVirtualFilePath(), NO_LOCK);
         } catch (IOException e) {
             String msg = String.format("Unable unlock file '%s'. ", virtualFile.getPath());
             LOG.error(msg + e.getMessage(), e); // More details in log but do not show internal error to caller.
@@ -1321,9 +1284,8 @@ public class FSMountPoint implements MountPoint {
     }
 
     private FileLock checkIsLockValidAndGet(VirtualFileImpl virtualFile) {
-        final int index = virtualFile.getVirtualFilePath().hashCode() & MASK;
         // causes read from file if need
-        final FileLock lock = lockTokensCache[index].get(virtualFile.getVirtualFilePath());
+        final FileLock lock = lockTokensCache.getUnchecked(virtualFile.getVirtualFilePath());
         if (NO_LOCK == lock) {
             return NO_LOCK;
         }
@@ -1335,7 +1297,7 @@ public class FSMountPoint implements MountPoint {
                     LOG.warn("Unable delete lock file %s. ", lockIoFile);
                 }
             }
-            lockTokensCache[index].put(virtualFile.getVirtualFilePath(), NO_LOCK);
+            lockTokensCache.put(virtualFile.getVirtualFilePath(), NO_LOCK);
             return NO_LOCK;
         }
         return lock;
@@ -1358,14 +1320,13 @@ public class FSMountPoint implements MountPoint {
 
     AccessControlList getACL(VirtualFileImpl virtualFile) {
         // Do not check permission here. We already check 'read' permission when get VirtualFile.
-        return new AccessControlList(aclCache[virtualFile.getVirtualFilePath().hashCode() & MASK].get(virtualFile.getVirtualFilePath()));
+        return new AccessControlList(aclCache.getUnchecked(virtualFile.getVirtualFilePath()));
     }
 
 
     void updateACL(VirtualFileImpl virtualFile, List<AccessControlEntry> acl, boolean override, String lockToken)
             throws ForbiddenException, ServerException {
-        final int index = virtualFile.getVirtualFilePath().hashCode() & MASK;
-        final AccessControlList actualACL = aclCache[index].get(virtualFile.getVirtualFilePath());
+        final AccessControlList actualACL = aclCache.getUnchecked(virtualFile.getVirtualFilePath());
 
         if (!hasPermission(virtualFile, BasicPermissions.UPDATE_ACL, true)) {
             throw new ForbiddenException(String.format("Unable update ACL for '%s'. Operation not permitted. ", virtualFile.getPath()));
@@ -1407,7 +1368,7 @@ public class FSMountPoint implements MountPoint {
         }
 
         // 4. update cache
-        aclCache[index].put(virtualFile.getVirtualFilePath(), copy);
+        aclCache.put(virtualFile.getVirtualFilePath(), copy);
         // 5. update last modification time
         if (!virtualFile.getIoFile().setLastModified(System.currentTimeMillis())) {
             LOG.warn("Unable to set timestamp to '{}'. ", virtualFile.getIoFile());
@@ -1425,7 +1386,7 @@ public class FSMountPoint implements MountPoint {
             if (path == null) {
                 return true;
             }
-            accessControlList = aclCache[path.hashCode() & MASK].get(path);
+            accessControlList = aclCache.getUnchecked(path);
             if (!accessControlList.isEmpty()) {
                 // A non-empty ACL, search done
                 break;
@@ -1498,7 +1459,6 @@ public class FSMountPoint implements MountPoint {
 
     void updateProperties(VirtualFileImpl virtualFile, List<Property> properties, String lockToken)
             throws ForbiddenException, ServerException {
-        final int index = virtualFile.getVirtualFilePath().hashCode() & MASK;
         if (!hasPermission(virtualFile, BasicPermissions.WRITE, true)) {
             throw new ForbiddenException(
                     String.format("Unable update properties for '%s'. Operation not permitted. ", virtualFile.getPath()));
@@ -1510,7 +1470,7 @@ public class FSMountPoint implements MountPoint {
         }
 
         // 1. make copy of properties
-        final Map<String, String[]> metadata = copyMetadataMap(metadataCache[index].get(virtualFile.getVirtualFilePath()));
+        final Map<String, String[]> metadata = copyMetadataMap(metadataCache.getUnchecked(virtualFile.getVirtualFilePath()));
         // 2. update
         for (Property property : properties) {
             final String name = property.getName();
@@ -1525,7 +1485,7 @@ public class FSMountPoint implements MountPoint {
         // 3. save in file
         saveFileMetadata(virtualFile, metadata);
         // 4. update cache
-        metadataCache[index].put(virtualFile.getVirtualFilePath(), metadata);
+        metadataCache.put(virtualFile.getVirtualFilePath(), metadata);
         // 5. update last modification time
         if (!virtualFile.getIoFile().setLastModified(System.currentTimeMillis())) {
             LOG.warn("Unable to set timestamp to '{}'. ", virtualFile.getIoFile());
@@ -1535,23 +1495,20 @@ public class FSMountPoint implements MountPoint {
 
 
     private Map<String, String[]> getFileMetadata(VirtualFileImpl virtualFile) {
-        final int index = virtualFile.getVirtualFilePath().hashCode() & MASK;
-        return copyMetadataMap(metadataCache[index].get(virtualFile.getVirtualFilePath()));
+        return copyMetadataMap(metadataCache.getUnchecked(virtualFile.getVirtualFilePath()));
     }
 
 
     String getPropertyValue(VirtualFileImpl virtualFile, String name) {
         // Do not check permission here. We already check 'read' permission when get VirtualFile.
-        final int index = virtualFile.getVirtualFilePath().hashCode() & MASK;
-        final String[] value = metadataCache[index].get(virtualFile.getVirtualFilePath()).get(name);
+        final String[] value = metadataCache.getUnchecked(virtualFile.getVirtualFilePath()).get(name);
         return value == null || value.length == 0 ? null : value[0];
     }
 
 
     String[] getPropertyValues(VirtualFileImpl virtualFile, String name) {
         // Do not check permission here. We already check 'read' permission when get VirtualFile.
-        final int index = virtualFile.getVirtualFilePath().hashCode() & MASK;
-        final String[] value = metadataCache[index].get(virtualFile.getVirtualFilePath()).get(name);
+        final String[] value = metadataCache.getUnchecked(virtualFile.getVirtualFilePath()).get(name);
         final String[] copyValue = new String[value.length];
         System.arraycopy(value, 0, copyValue, 0, value.length);
         return copyValue;
@@ -1564,9 +1521,8 @@ public class FSMountPoint implements MountPoint {
 
 
     void setProperty(VirtualFileImpl virtualFile, String name, String... value) throws ServerException {
-        final int index = virtualFile.getVirtualFilePath().hashCode() & MASK;
         // 1. make copy of properties
-        final Map<String, String[]> metadata = copyMetadataMap(metadataCache[index].get(virtualFile.getVirtualFilePath()));
+        final Map<String, String[]> metadata = copyMetadataMap(metadataCache.getUnchecked(virtualFile.getVirtualFilePath()));
         // 2. update
         if (value != null) {
             String[] copyValue = new String[value.length];
@@ -1578,7 +1534,7 @@ public class FSMountPoint implements MountPoint {
         // 3. save in file
         saveFileMetadata(virtualFile, metadata);
         // 4. update cache
-        metadataCache[index].put(virtualFile.getVirtualFilePath(), metadata);
+        metadataCache.put(virtualFile.getVirtualFilePath(), metadata);
     }
 
 
