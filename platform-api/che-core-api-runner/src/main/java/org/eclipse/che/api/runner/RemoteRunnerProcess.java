@@ -12,12 +12,12 @@ package org.eclipse.che.api.runner;
 
 import com.google.common.io.ByteStreams;
 
+import org.eclipse.che.api.core.BadRequestException;
 import org.eclipse.che.api.core.ConflictException;
 import org.eclipse.che.api.core.ForbiddenException;
 import org.eclipse.che.api.core.NotFoundException;
 import org.eclipse.che.api.core.ServerException;
 import org.eclipse.che.api.core.UnauthorizedException;
-import org.eclipse.che.api.core.rest.HttpJsonHelper;
 import org.eclipse.che.api.core.rest.HttpJsonRequestFactory;
 import org.eclipse.che.api.core.rest.HttpOutputMessage;
 import org.eclipse.che.api.core.rest.OutputProvider;
@@ -25,15 +25,11 @@ import org.eclipse.che.api.core.rest.shared.dto.Link;
 import org.eclipse.che.api.runner.dto.ApplicationProcessDescriptor;
 import org.eclipse.che.api.runner.internal.Constants;
 import org.eclipse.che.commons.env.EnvironmentContext;
-import org.eclipse.che.dto.server.DtoFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.HttpMethod;
 import javax.ws.rs.core.HttpHeaders;
-
-import static org.eclipse.che.api.runner.RunnerUtils.runnerRequest;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -86,7 +82,13 @@ public class RemoteRunnerProcess {
      */
     public ApplicationProcessDescriptor getApplicationProcessDescriptor() throws RunnerException, NotFoundException {
     	String url = baseUrl + "/status/" + runner + '/' + processId;
-    	return runnerRequest(requestFactory.fromUrl(url).setTimeout(10000)).asDto(ApplicationProcessDescriptor.class);
+        try {
+            return requestFactory.fromUrl(url).setTimeout(10000).request().asDto(ApplicationProcessDescriptor.class);
+        } catch (IOException e) {
+            throw new RunnerException(e);
+        } catch (ServerException | UnauthorizedException | ForbiddenException | ConflictException | BadRequestException e) {
+            throw new RunnerException(e.getServiceError());
+        }
     }
 
     /**
@@ -111,7 +113,13 @@ public class RemoteRunnerProcess {
                     throw new RunnerException("Can't stop application. Link for stop application is not available.");
             }
         }
-        return runnerRequest(requestFactory.fromLink(link)).asDto(ApplicationProcessDescriptor.class);
+        try {
+            return requestFactory.fromLink(link).request().asDto(ApplicationProcessDescriptor.class);
+        } catch (IOException e) {
+            throw new RunnerException(e);
+        } catch (ServerException | UnauthorizedException | ForbiddenException | ConflictException | BadRequestException e) {
+            throw new RunnerException(e.getServiceError());
+        }
     }
 
     public void readLogs(OutputProvider output) throws IOException, RunnerException, NotFoundException {

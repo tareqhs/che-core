@@ -22,9 +22,15 @@ import org.eclipse.che.api.builder.dto.BuilderState;
 import org.eclipse.che.api.builder.dto.DependencyRequest;
 import org.eclipse.che.api.builder.internal.BuilderEvent;
 import org.eclipse.che.api.builder.internal.Constants;
+import org.eclipse.che.api.core.ApiException;
+import org.eclipse.che.api.core.ConflictException;
+import org.eclipse.che.api.core.ForbiddenException;
 import org.eclipse.che.api.core.NotFoundException;
+import org.eclipse.che.api.core.ServerException;
+import org.eclipse.che.api.core.UnauthorizedException;
 import org.eclipse.che.api.core.notification.EventService;
 import org.eclipse.che.api.core.notification.EventSubscriber;
+import org.eclipse.che.api.core.rest.HttpJsonHelper;
 import org.eclipse.che.api.core.rest.HttpJsonRequestFactory;
 import org.eclipse.che.api.core.rest.ServiceContext;
 import org.eclipse.che.api.core.rest.shared.dto.Link;
@@ -53,6 +59,7 @@ import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Singleton;
 import javax.ws.rs.core.UriBuilder;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -449,7 +456,13 @@ public class BuildQueue {
                                                        .path(ProjectService.class, "getProject")
                                                        .build(workspace, project.startsWith("/") ? project.substring(1) : project)
                                                        .toString();
-        return builderRequest(requestFactory.fromUrl(projectUrl)).asDto(ProjectDescriptor.class);
+        try {
+            return requestFactory.fromUrl(projectUrl).request().asDto(ProjectDescriptor.class);
+        } catch (IOException e) {
+            throw new BuilderException(e);
+        } catch (ApiException e) {
+            throw new BuilderException(e.getServiceError());
+        }
     }
 
     private WorkspaceDescriptor getWorkspaceDescriptor(String workspace, ServiceContext serviceContext) throws BuilderException {
@@ -457,7 +470,13 @@ public class BuildQueue {
         final String workspaceUrl = baseWorkspaceUriBuilder.path(WorkspaceService.class)
                                                            .path(WorkspaceService.class, "getById")
                                                            .build(workspace).toString();
-        return builderRequest(requestFactory.fromUrl(workspaceUrl)).asDto(WorkspaceDescriptor.class);
+        try {
+            return requestFactory.fromUrl(workspaceUrl).request().asDto(WorkspaceDescriptor.class);
+        } catch (IOException e) {
+            throw new BuilderException(e);
+        } catch (ApiException e) {
+            throw new BuilderException(e.getServiceError());
+        }
     }
 
     // Switched to default for test.

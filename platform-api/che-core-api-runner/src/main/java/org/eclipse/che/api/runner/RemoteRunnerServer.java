@@ -10,12 +10,8 @@
  *******************************************************************************/
 package org.eclipse.che.api.runner;
 
-import org.eclipse.che.api.core.ConflictException;
-import org.eclipse.che.api.core.ForbiddenException;
-import org.eclipse.che.api.core.NotFoundException;
+import org.eclipse.che.api.core.ApiException;
 import org.eclipse.che.api.core.ServerException;
-import org.eclipse.che.api.core.UnauthorizedException;
-import org.eclipse.che.api.core.rest.HttpJsonHelper;
 import org.eclipse.che.api.core.rest.HttpJsonRequestFactory;
 import org.eclipse.che.api.core.rest.RemoteServiceDescriptor;
 import org.eclipse.che.api.core.rest.shared.dto.Link;
@@ -24,8 +20,6 @@ import org.eclipse.che.api.runner.dto.RunnerDescriptor;
 import org.eclipse.che.api.runner.dto.RunnerServerDescriptor;
 import org.eclipse.che.api.runner.dto.ServerState;
 import org.eclipse.che.api.runner.internal.Constants;
-
-import static org.eclipse.che.api.runner.RunnerUtils.runnerRequest;
 
 import java.io.IOException;
 import java.util.LinkedList;
@@ -127,10 +121,10 @@ public class RemoteRunnerServer extends RemoteServiceDescriptor {
             if (link == null) {
                 throw new RunnerException("Unable get URL for retrieving list of remote runners");
             }
-            return runnerRequest(requestFactory.fromLink(link)).asList(RunnerDescriptor.class);
+            return requestFactory.fromLink(link).request().asList(RunnerDescriptor.class);
         } catch (IOException e) {
             throw new RunnerException(e);
-        } catch (ServerException e) {
+        } catch (ApiException e) {
             throw new RunnerException(e.getServiceError());
         }
     }
@@ -141,10 +135,10 @@ public class RemoteRunnerServer extends RemoteServiceDescriptor {
             if (stateLink == null) {
                 throw new RunnerException(String.format("Unable get URL for getting state of a remote server '%s'", baseUrl));
             }
-            return runnerRequest(requestFactory.fromLink(stateLink).setTimeout(10000)).asDto(ServerState.class);
+            return requestFactory.fromLink(stateLink).setTimeout(10000).request().asDto(ServerState.class);
         } catch (IOException e) {
             throw new RunnerException(e);
-        } catch (ServerException e) {
+        } catch (ApiException e) {
             throw new RunnerException(e.getServiceError());
         }
     }

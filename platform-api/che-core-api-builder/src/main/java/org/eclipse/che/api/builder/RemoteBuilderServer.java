@@ -13,20 +13,18 @@ package org.eclipse.che.api.builder;
 import org.eclipse.che.api.builder.internal.Constants;
 import org.eclipse.che.api.builder.dto.BuilderDescriptor;
 import org.eclipse.che.api.builder.dto.ServerState;
+import org.eclipse.che.api.core.ApiException;
 import org.eclipse.che.api.core.BadRequestException;
 import org.eclipse.che.api.core.ConflictException;
 import org.eclipse.che.api.core.ForbiddenException;
 import org.eclipse.che.api.core.NotFoundException;
 import org.eclipse.che.api.core.ServerException;
 import org.eclipse.che.api.core.UnauthorizedException;
-import org.eclipse.che.api.core.rest.HttpJsonHelper;
 import org.eclipse.che.api.core.rest.HttpJsonRequest;
 import org.eclipse.che.api.core.rest.HttpJsonRequestFactory;
 import org.eclipse.che.api.core.rest.HttpJsonResponse;
 import org.eclipse.che.api.core.rest.RemoteServiceDescriptor;
 import org.eclipse.che.api.core.rest.shared.dto.Link;
-
-import static org.eclipse.che.api.builder.BuilderUtils.builderRequest;
 
 import java.io.IOException;
 import java.util.LinkedList;
@@ -97,26 +95,30 @@ public class RemoteBuilderServer extends RemoteServiceDescriptor {
     }
 
     public List<BuilderDescriptor> getBuilderDescriptors() throws BuilderException {
-        return linkReq(Constants.LINK_REL_AVAILABLE_BUILDERS, 0).asList(BuilderDescriptor.class);
+        try {
+            final Link link = getLink(Constants.LINK_REL_AVAILABLE_BUILDERS);
+            if (link == null) {
+                throw new BuilderException("Unable get URL for retrieving list of remote builders");
+            }
+            return requestFactory.fromLink(link).request().asList(BuilderDescriptor.class);
+        } catch (IOException e) {
+            throw new BuilderException(e);
+        } catch (ApiException e) {
+            throw new BuilderException(e.getServiceError());
+        }
     }
 
     public ServerState getServerState() throws BuilderException {
-        return linkReq(Constants.LINK_REL_SERVER_STATE, 10000).asDto(ServerState.class);
-    }
-
-    private HttpJsonResponse linkReq(String linkName, int timeout) throws BuilderException {
-        final Link link;
         try {
-            link = getLink(linkName);
-            if (link == null) {
-                throw new BuilderException("Unable get URL for '" + linkName + "'");
+            final Link stateLink = getLink(Constants.LINK_REL_SERVER_STATE);
+            if (stateLink == null) {
+                throw new BuilderException(String.format("Unable get URL for getting state of a remote server '%s'", baseUrl));
             }
+            return requestFactory.fromLink(stateLink).setTimeout(10000).request().asDto(ServerState.class);
         } catch (IOException e) {
             throw new BuilderException(e);
-        } catch (ServerException e) {
+        } catch (ApiException e) {
             throw new BuilderException(e.getServiceError());
         }
-        return builderRequest(requestFactory.fromLink(link).setTimeout(timeout));
     }
-
 }

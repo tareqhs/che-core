@@ -17,14 +17,20 @@ import org.eclipse.che.api.builder.dto.BuildRequest;
 import org.eclipse.che.api.builder.dto.BuilderDescriptor;
 import org.eclipse.che.api.builder.dto.BuilderState;
 import org.eclipse.che.api.builder.dto.DependencyRequest;
+import org.eclipse.che.api.core.ApiException;
+import org.eclipse.che.api.core.ConflictException;
+import org.eclipse.che.api.core.ForbiddenException;
+import org.eclipse.che.api.core.NotFoundException;
+import org.eclipse.che.api.core.ServerException;
+import org.eclipse.che.api.core.UnauthorizedException;
+import org.eclipse.che.api.core.rest.HttpJsonHelper;
 import org.eclipse.che.api.core.rest.HttpJsonRequestFactory;
 import org.eclipse.che.api.core.rest.shared.Links;
 import org.eclipse.che.api.core.rest.shared.dto.Link;
 import org.eclipse.che.dto.server.DtoFactory;
 import org.eclipse.che.api.builder.dto.BuilderEnvironment;
 
-import static org.eclipse.che.api.builder.BuilderUtils.builderRequest;
-
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -150,7 +156,14 @@ public class RemoteBuilder {
     }
 
     private RemoteTask perform(Link link, BaseBuilderRequest request) throws BuilderException {
-        BuildTaskDescriptor build = builderRequest(requestFactory.fromLink(link).setBody(request)).asDto(BuildTaskDescriptor.class);
+        final BuildTaskDescriptor build;
+        try {
+            build = requestFactory.fromLink(link).setBody(request).request().asDto(BuildTaskDescriptor.class);
+        } catch (IOException e) {
+            throw new BuilderException(e);
+        } catch (ApiException e) {
+            throw new BuilderException(e.getServiceError());
+        }
         lastUsage = System.currentTimeMillis();
         return new RemoteTask(baseUrl, request.getBuilder(), build.getTaskId(), requestFactory);
     }
@@ -167,7 +180,13 @@ public class RemoteBuilder {
         if (link == null) {
             throw new BuilderException("Unable get URL for getting state of a remote builder");
         }
-        return builderRequest(requestFactory.fromLink(link).addQueryParam("builder", name).setTimeout(10000)).asDto(BuilderState.class);
+        try {
+            return requestFactory.fromLink(link).addQueryParam("builder", name).setTimeout(10000).request().asDto(BuilderState.class);
+        } catch (IOException e) {
+            throw new BuilderException(e);
+        } catch (ApiException e) {
+            throw new BuilderException(e.getServiceError());
+        }
     }
 
     @Override

@@ -18,6 +18,7 @@ import org.eclipse.che.api.builder.BuildStatus;
 import org.eclipse.che.api.builder.BuilderService;
 import org.eclipse.che.api.builder.dto.BuildOptions;
 import org.eclipse.che.api.builder.dto.BuildTaskDescriptor;
+import org.eclipse.che.api.core.ApiException;
 import org.eclipse.che.api.core.ConflictException;
 import org.eclipse.che.api.core.ForbiddenException;
 import org.eclipse.che.api.core.NotFoundException;
@@ -72,8 +73,6 @@ import javax.inject.Singleton;
 import javax.ws.rs.HttpMethod;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriBuilder;
-
-import static org.eclipse.che.api.runner.RunnerUtils.runnerRequest;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -588,7 +587,13 @@ public class RunQueue {
         final String workspaceUrl = baseWorkspaceUriBuilder.path(WorkspaceService.class)
                                                            .path(WorkspaceService.class, "getById")
                                                            .build(workspace).toString();
-        return runnerRequest(requestFactory.fromUrl(workspaceUrl)).asDto(WorkspaceDescriptor.class);
+        try {
+            return requestFactory.fromUrl(workspaceUrl).request().asDto(WorkspaceDescriptor.class);
+        } catch (IOException e) {
+            throw new RunnerException(e);
+        } catch (ApiException e) {
+            throw new RunnerException(e.getServiceError());
+        }
     }
 
     // Switched to default for test.
@@ -599,7 +604,13 @@ public class RunQueue {
                                                        .path(ProjectService.class, "getProject")
                                                        .build(workspace, project.startsWith("/") ? project.substring(1) : project)
                                                        .toString();
-        return runnerRequest(requestFactory.fromUrl(projectUrl)).asDto(ProjectDescriptor.class);
+        try {
+            return requestFactory.fromUrl(projectUrl).request().asDto(ProjectDescriptor.class);
+        } catch (IOException e) {
+            throw new RunnerException(e);
+        } catch (ApiException e) {
+            throw new RunnerException(e.getServiceError());
+        }
     }
 
     // Switched to default for test.
@@ -746,19 +757,20 @@ public class RunQueue {
     // private
     BuildTaskDescriptor startBuild(RemoteServiceDescriptor builderService, String project, BuildOptions buildOptions)
             throws RunnerException {
-        final Link buildLink;
+        final BuildTaskDescriptor buildDescriptor;
         try {
-            buildLink = builderService.getLink(org.eclipse.che.api.builder.internal.Constants.LINK_REL_BUILD);
+            final Link buildLink = builderService.getLink(org.eclipse.che.api.builder.internal.Constants.LINK_REL_BUILD);
             if (buildLink == null) {
                 throw new RunnerException("You requested a run and your project has not been built." +
                                           " The runner was unable to get the proper build URL to initiate a build.");
             }
+            buildDescriptor = requestFactory.fromLink(buildLink).addQueryParam("project", project).setBody(buildOptions).request().asDto(BuildTaskDescriptor.class);
         } catch (IOException e) {
             throw new RunnerException(e);
-        } catch (ServerException e) {
+        } catch (ApiException e) {
             throw new RunnerException(e.getServiceError());
         }
-        return runnerRequest(requestFactory.fromLink(buildLink).addQueryParam("project", project).setBody(buildOptions)).asDto(BuildTaskDescriptor.class);
+        return buildDescriptor;
     }
 
     protected Callable<RemoteRunnerProcess> createTaskFor(final List<RemoteRunner> matched,
@@ -778,7 +790,13 @@ public class RunQueue {
 		String href = String.format("%s/%s/%s", childrenLink.getHref(),
 				org.eclipse.che.api.project.server.Constants.CODENVY_RUNNER_ENVIRONMENTS_DIR, envName);
 		Link link = DtoFactory.getInstance().clone(childrenLink).withHref(href);
-        return runnerRequest(requestFactory.fromLink(link)).asList(ItemReference.class);
+        try {
+            return requestFactory.fromLink(link).request().asList(ItemReference.class);
+        } catch (IOException e) {
+            throw new RunnerException(e);
+        } catch (ApiException e) {
+            throw new RunnerException(e.getServiceError());
+        }
     }
 
     // Switched to default for test.
@@ -1016,7 +1034,7 @@ public class RunQueue {
                             return null;
                         }
                     }
-                    buildDescriptor = runnerRequest(requestFactory.fromLink(buildStatusLink)).asDto(BuildTaskDescriptor.class);
+                    buildDescriptor = requestFactory.fromLink(buildStatusLink).request().asDto(BuildTaskDescriptor.class);
                     // to be able show current state of build process with RunQueueTask.
                     buildTaskHolder.set(buildDescriptor);
                     final BuildStatus buildStatus = buildDescriptor.getStatus();

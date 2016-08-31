@@ -14,7 +14,12 @@ import com.google.common.io.ByteStreams;
 
 import org.eclipse.che.api.builder.dto.BuildTaskDescriptor;
 import org.eclipse.che.api.builder.internal.Constants;
+import org.eclipse.che.api.core.BadRequestException;
+import org.eclipse.che.api.core.ConflictException;
+import org.eclipse.che.api.core.ForbiddenException;
 import org.eclipse.che.api.core.NotFoundException;
+import org.eclipse.che.api.core.ServerException;
+import org.eclipse.che.api.core.UnauthorizedException;
 import org.eclipse.che.api.core.rest.HttpJsonRequestFactory;
 import org.eclipse.che.api.core.rest.HttpOutputMessage;
 import org.eclipse.che.api.core.rest.shared.dto.Link;
@@ -31,7 +36,6 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
-import static org.eclipse.che.api.builder.BuilderUtils.builderRequest;
 
 /**
  * Representation of remote builder's task.
@@ -90,7 +94,13 @@ public class RemoteTask {
      */
     public BuildTaskDescriptor getBuildTaskDescriptor() throws BuilderException, NotFoundException {
     	String url = String.format("%s/status/%s/%d", baseUrl, builder, taskId);
-    	return builderRequest(requestFactory.fromUrl(url)).asDto(BuildTaskDescriptor.class);
+        try {
+            return requestFactory.fromUrl(url).request().asDto(BuildTaskDescriptor.class);
+        } catch (IOException e) {
+            throw new BuilderException(e);
+        } catch (ServerException | UnauthorizedException | ForbiddenException | ConflictException | BadRequestException e) {
+            throw new BuilderException(e.getServiceError());
+        }
     }
 
     /**
@@ -116,7 +126,13 @@ public class RemoteTask {
                     throw new BuilderException("Can't cancel task. Cancellation link is not available");
             }
         }
-        return builderRequest(requestFactory.fromLink(link)).asDto(BuildTaskDescriptor.class);
+        try {
+            return requestFactory.fromLink(link).request().asDto(BuildTaskDescriptor.class);
+        } catch (IOException e) {
+            throw new BuilderException(e);
+        } catch (ServerException | UnauthorizedException | ForbiddenException | ConflictException | BadRequestException e) {
+            throw new BuilderException(e.getServiceError());
+        }
     }
 
     /**
